@@ -16,19 +16,28 @@
 
 package qunar.tc.qmq.metainfoclient;
 
-import qunar.tc.qmq.meta.MetaServerLocator;
+import com.google.common.util.concurrent.ListenableFuture;
+import qunar.tc.qmq.meta.ProducerAllocation;
+import qunar.tc.qmq.protocol.MetaInfoResponse;
+import qunar.tc.qmq.protocol.QuerySubjectRequest;
 import qunar.tc.qmq.protocol.consumer.MetaInfoRequest;
-import qunar.tc.qmq.protocol.consumer.MetaInfoResponse;
 
 /**
  * @author yiqun.fan create on 17-9-1.
  */
-interface MetaInfoClient {
-    void sendRequest(MetaInfoRequest request);
+public interface MetaInfoClient {
+
+    ListenableFuture<MetaInfoResponse> sendMetaInfoRequest(MetaInfoRequest request);
+
+    /**
+     * 使用 partitionName 查询 subject
+     *
+     * @param request request
+     * @return subject
+     */
+    ListenableFuture<String> querySubject(QuerySubjectRequest request);
 
     void registerResponseSubscriber(ResponseSubscriber receiver);
-
-    void setMetaServerLocator(MetaServerLocator locator);
 
     interface ResponseSubscriber {
         void onResponse(MetaInfoResponse response);

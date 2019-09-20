@@ -19,6 +19,7 @@ package qunar.tc.qmq.consumer.pull;
 import com.google.common.collect.Lists;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import qunar.tc.qmq.ConsumeStrategy;
 import qunar.tc.qmq.Message;
 import qunar.tc.qmq.broker.BrokerService;
 import qunar.tc.qmq.config.PullSubjectsConfig;
@@ -27,6 +28,7 @@ import qunar.tc.qmq.metrics.Metrics;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 
@@ -35,7 +37,7 @@ import static qunar.tc.qmq.metrics.MetricsConstants.SUBJECT_GROUP_ARRAY;
 /**
  * @author yiqun.fan create on 17-9-20.
  */
-class DefaultPullConsumer extends AbstractPullConsumer implements Runnable {
+class DefaultPullConsumer extends AbstractPullConsumer {
     private static final Logger LOGGER = LoggerFactory.getLogger(DefaultPullConsumer.class);
 
     private static final int POLL_TIMEOUT_MILLIS = 1000;
@@ -50,8 +52,22 @@ class DefaultPullConsumer extends AbstractPullConsumer implements Runnable {
     private final int preFetchSize;
     private final int lowWaterMark;
 
-    DefaultPullConsumer(String subject, String group, boolean isBroadcast, String clientId, PullService pullService, AckService ackService, BrokerService brokerService) {
-        super(subject, group, isBroadcast, clientId, pullService, ackService, brokerService);
+    DefaultPullConsumer(
+            String subject,
+            String consumerGroup,
+            String partitionName,
+            String brokerGroup,
+            ConsumeStrategy consumeStrategy,
+            int version,
+            long consumptionExpiredTime,
+            boolean isBroadcast,
+            boolean isOrdered,
+            String clientId,
+            PullService pullService,
+            AckService ackService,
+            BrokerService brokerService,
+            SendMessageBack sendMessageBack) {
+        super(subject, consumerGroup, partitionName, brokerGroup, consumeStrategy, version, consumptionExpiredTime, isBroadcast, isOrdered, clientId, pullService, ackService, brokerService, sendMessageBack);
         this.preFetchSize = PullSubjectsConfig.get().getPullBatchSize(subject).get();
         this.lowWaterMark = Math.round(preFetchSize * 0.2F);
     }
@@ -100,23 +116,6 @@ class DefaultPullConsumer extends AbstractPullConsumer implements Runnable {
             int fetchSize = preFetchSize - bufferSize;
             PullMessageFuture future = new PullMessageFuture(0, fetchSize, -1, false);
             requestQueue.offer(future);
-        }
-    }
-
-    @Override
-    public void run() {
-        PullMessageFuture future;
-        while (!isStop) {
-            try {
-                if (!onlineSwitcher.waitOn()) continue;
-
-                future = requestQueue.poll(POLL_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS);
-                if (future != null) doPull(future);
-            } catch (InterruptedException e) {
-                LOGGER.error("pullConsumer poll be interrupted. subject={}, group={}", subject(), group(), e);
-            } catch (Exception e) {
-                LOGGER.error("pullConsumer poll exception. subject={}, group={}", subject(), group(), e);
-            }
         }
     }
 
@@ -188,5 +187,36 @@ class DefaultPullConsumer extends AbstractPullConsumer implements Runnable {
     @Override
     public void close() {
         isStop = true;
+    }
+
+    @Override
+    public void startPull(ExecutorService executor) {
+        executor.submit(() -> {
+
+            PullMessageFuture future;
+            while (!isStop) {
+                try {
+                    if (!onlineSwitcher.waitOn()) continue;
+
+                    future = requestQueue.poll(POLL_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS);
+                    if (future != null) doPull(future);
+                } catch (InterruptedException e) {
+                    LOGGER.error("pullConsumer poll be interrupted. subject={}, group={}", subject(), group(), e);
+                } catch (Exception e) {
+                    LOGGER.error("pullConsumer poll exception. subject={}, group={}", subject(), group(), e);
+                }
+            }
+        });
+    }
+
+    @Override
+    public void stopPull() {
+
+    }
+
+    @Override
+    public void destroy() {
+        close();
+        super.destroy();
     }
 }

@@ -16,6 +16,8 @@
 
 package qunar.tc.qmq.meta.model;
 
+import qunar.tc.qmq.base.OnOfflineState;
+
 /**
  * @author yunfeng.yang
  * @since 2017/9/25
@@ -27,6 +29,7 @@ public class ClientMetaInfo {
     private String room;
     private String clientId;
     private String consumerGroup;
+    private OnOfflineState onlineStatus;
 
     public String getSubject() {
         return subject;
@@ -74,6 +77,15 @@ public class ClientMetaInfo {
 
     public void setConsumerGroup(String consumerGroup) {
         this.consumerGroup = consumerGroup;
+    }
+
+    public OnOfflineState getOnlineStatus() {
+        return onlineStatus;
+    }
+
+    public ClientMetaInfo setOnlineStatus(OnOfflineState onlineStatus) {
+        this.onlineStatus = onlineStatus;
+        return this;
     }
 
     @Override

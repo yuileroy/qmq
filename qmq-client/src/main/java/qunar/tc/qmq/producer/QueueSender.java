@@ -16,6 +16,7 @@
 package qunar.tc.qmq.producer;
 
 
+import qunar.tc.qmq.MessageGroup;
 import qunar.tc.qmq.ProduceMessage;
 
 /**
@@ -26,9 +27,13 @@ public interface QueueSender {
 
     boolean offer(ProduceMessage pm);
 
+    boolean offer(ProduceMessage pm, MessageGroup messageGroup);
+
     boolean offer(ProduceMessage pm, long millisecondWait);
 
     void send(ProduceMessage pm);
+
+    void send(ProduceMessage pm, MessageGroup messageGroup);
 
     void destroy();
 }

@@ -19,38 +19,73 @@ package qunar.tc.qmq.consumer.pull;
 import com.google.common.util.concurrent.ListenableFuture;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import qunar.tc.qmq.ConsumeStrategy;
 import qunar.tc.qmq.Message;
 import qunar.tc.qmq.PullConsumer;
+import qunar.tc.qmq.StatusSource;
 import qunar.tc.qmq.broker.BrokerService;
-import qunar.tc.qmq.common.StatusSource;
 import qunar.tc.qmq.common.SwitchWaiter;
+import qunar.tc.qmq.utils.RetryPartitionUtils;
 
 import java.util.List;
-import java.util.concurrent.Future;
 
-import static qunar.tc.qmq.common.StatusSource.CODE;
+import static qunar.tc.qmq.StatusSource.CODE;
 
 /**
  * @author yiqun.fan create on 17-10-19.
  */
-abstract class AbstractPullConsumer implements PullConsumer {
+abstract class AbstractPullConsumer extends AbstractPullClient implements PullConsumer {
     private static final Logger LOGGER = LoggerFactory.getLogger(AbstractPullConsumer.class);
 
     private static final long MIN_PULL_TIMEOUT_MILLIS = 1000;  // 最短拉取超时时间是1秒
-    private static long MAX_PULL_TIMEOUT_MILLIS = Long.MAX_VALUE / 2;  // 最长拉取超时时间
 
     final SwitchWaiter onlineSwitcher = new SwitchWaiter(true);
 
     private final ConsumeParam consumeParam;
-    private final ConsumeParam retryConsumeParam;
     final PlainPullEntry pullEntry;
     final PlainPullEntry retryPullEntry;
 
-    AbstractPullConsumer(String subject, String group, boolean isBroadcast, String clientId, PullService pullService, AckService ackService, BrokerService brokerService) {
-        this.consumeParam = new ConsumeParam(subject, group, isBroadcast, false, clientId);
-        this.retryConsumeParam = new ConsumeParam(consumeParam.getRetrySubject(), group, isBroadcast, false, clientId);
-        this.pullEntry = new PlainPullEntry(consumeParam, pullService, ackService, brokerService, new AlwaysPullStrategy());
-        this.retryPullEntry = new PlainPullEntry(retryConsumeParam, pullService, ackService, brokerService, new WeightPullStrategy());
+    AbstractPullConsumer(
+            String subject,
+            String consumerGroup,
+            String partitionName,
+            String brokerGroup,
+            ConsumeStrategy consumeStrategy,
+            int version,
+            long consumptionExpiredTime,
+            boolean isBroadcast,
+            boolean isOrdered,
+            String clientId,
+            PullService pullService,
+            AckService ackService,
+            BrokerService brokerService,
+            SendMessageBack sendMessageBack) {
+        super(subject, consumerGroup, partitionName, brokerGroup, consumeStrategy, version, consumptionExpiredTime, brokerService);
+        this.consumeParam = new ConsumeParam(subject, consumerGroup, isBroadcast, isOrdered, false, clientId);
+        this.pullEntry = new PlainPullEntry(
+                consumeParam,
+                partitionName,
+                brokerGroup,
+                consumeStrategy,
+                version,
+                consumptionExpiredTime,
+                pullService,
+                ackService,
+                brokerService,
+                new AlwaysPullStrategy(),
+                sendMessageBack);
+        this.retryPullEntry = new PlainPullEntry(
+                consumeParam,
+                RetryPartitionUtils.buildRetryPartitionName(subject, consumerGroup),
+                brokerGroup,
+                consumeStrategy,
+                version,
+                consumptionExpiredTime,
+                pullService,
+                ackService,
+                brokerService,
+                new WeightPullStrategy(),
+                sendMessageBack);
     }
 
     private static long checkAndGetTimeout(long timeout) {
@@ -84,13 +119,12 @@ abstract class AbstractPullConsumer implements PullConsumer {
 
     @Override
     public String group() {
-        return consumeParam.getGroup();
+        return consumeParam.getConsumerGroup();
     }
 
     @Override
     public void setConsumeMostOnce(boolean consumeMostOnce) {
         consumeParam.setConsumeMostOnce(consumeMostOnce);
-        retryConsumeParam.setConsumeMostOnce(consumeMostOnce);
     }
 
     @Override
@@ -113,14 +147,26 @@ abstract class AbstractPullConsumer implements PullConsumer {
     }
 
     @Override
-    public Future<List<Message>> pullFuture(int size, long timeoutMillis) {
-        return newFuture(size, checkAndGetTimeout(timeoutMillis), false);
+    public ListenableFuture<List<Message>> pullFuture(int size, long timeoutMillis) {
+        return newFuture(size, checkAndGetTimeout(timeoutMillis), DEFAULT_RESET_CREATE_TIME);
     }
 
     @Override
-    public Future<List<Message>> pullFuture(int size, long timeoutMillis, boolean isResetCreateTime) {
+    public ListenableFuture<List<Message>> pullFuture(int size, long timeoutMillis, boolean isResetCreateTime) {
         return newFuture(size, checkAndGetTimeout(timeoutMillis), isResetCreateTime);
     }
 
     abstract PullMessageFuture newFuture(int size, long timeout, boolean isResetCreateTime);
+
+    @Override
+    public String getClientId() {
+        return consumeParam.getConsumerId();
+    }
+
+    @Override
+    public void destroy() {
+        pullEntry.destroy();
+        retryPullEntry.destroy();
+        super.destroy();
+    }
 }

@@ -8,7 +8,6 @@ import qunar.tc.qmq.MessageListener;
 import qunar.tc.qmq.consumer.MessageConsumerProvider;
 
 import java.io.File;
-import java.io.IOException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;

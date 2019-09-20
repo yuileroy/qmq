@@ -21,6 +21,7 @@ import io.opentracing.Tracer;
 import io.opentracing.util.GlobalTracer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import qunar.tc.qmq.MessageGroup;
 import qunar.tc.qmq.MessageSendStateListener;
 import qunar.tc.qmq.MessageStore;
 import qunar.tc.qmq.ProduceMessage;
@@ -56,7 +57,7 @@ class ProduceMessageImpl implements ProduceMessage {
     private static final QmqCounter enterQueueFail = Metrics.counter("qmq_client_enter_queue_fail");
 
     private static final String persistenceTime = "qmq_client_persistence_time";
-    private static final String[] persistenceTags = new String[] {"subject", "type"};
+    private static final String[] persistenceTags = new String[]{"subject", "type"};
 
     private static final String persistenceThrowable = "qmq_client_persistence_throwable";
 
@@ -86,6 +87,7 @@ class ProduceMessageImpl implements ProduceMessage {
 
     //如果使用了分库分表等，用于临时记录分库分表的路由信息，确保在发送消息成功后能够根据路由信息找到插入的db
     private transient Object routeKey;
+    private MessageGroup messageGroup;
 
     public ProduceMessageImpl(BaseMessage base, QueueSender sender) {
         this.base = base;
@@ -148,15 +150,21 @@ class ProduceMessageImpl implements ProduceMessage {
             store.finish(this);
             Metrics.timer(persistenceTime,
                     persistenceTags,
-                    new String[] {getSubject(), "success"})
+                    new String[]{getSubject(), "success"})
                     .update(System.currentTimeMillis() - startTime, TimeUnit.MILLISECONDS);
         } catch (Exception e) {
             TraceUtil.recordEvent("Qmq.Store.Failed");
-            Metrics.counter(persistenceThrowable, persistenceTags, new String[] {getSubject(), "success"}).inc();
+            Metrics.counter(persistenceThrowable, persistenceTags, new String[]{getSubject(), "success"}).inc();
         } finally {
             onSuccess();
             closeTrace();
         }
+    }
+
+    @Override
+    public void reset() {
+        LOGGER.info("消息状态重置 {}:{} tries:maxRetries {}:{}", getSubject(), getMessageId(), tries, getMaxTries());
+        state.set(INIT);
     }
 
     private void onSuccess() {
@@ -192,11 +200,11 @@ class ProduceMessageImpl implements ProduceMessage {
                 store.block(this);
                 Metrics.timer(persistenceTime,
                         persistenceTags,
-                        new String[] {getSubject(), "block"})
+                        new String[]{getSubject(), "block"})
                         .update(System.currentTimeMillis() - startTime, TimeUnit.MILLISECONDS);
             } catch (Exception e) {
                 TraceUtil.recordEvent("Qmq.Store.Failed");
-                Metrics.counter(persistenceThrowable, persistenceTags, new String[] {getSubject(), "block"}).inc();
+                Metrics.counter(persistenceThrowable, persistenceTags, new String[]{getSubject(), "block"}).inc();
             }
             LOGGER.info("消息被拒绝");
             if (store == null && syncSend) {
@@ -280,7 +288,7 @@ class ProduceMessageImpl implements ProduceMessage {
                     persistenceTags,
                     new String[]{getSubject(), "save"}).update(System.nanoTime() - start, TimeUnit.NANOSECONDS);
         } catch (Exception e) {
-            Metrics.counter(persistenceThrowable, persistenceTags, new String[] {this.getSubject(), "save"}).inc();
+            Metrics.counter(persistenceThrowable, persistenceTags, new String[]{this.getSubject(), "save"}).inc();
             throw e;
         }
 
@@ -325,5 +333,24 @@ class ProduceMessageImpl implements ProduceMessage {
 
     public void setSyncSend(boolean syncSend) {
         this.syncSend = syncSend;
+    }
+
+    @Override
+    public int getTries() {
+        return tries.get();
+    }
+
+    @Override
+    public int getMaxTries() {
+        return sendTryCount;
+    }
+
+    public void setMessageGroup(MessageGroup messageGroup) {
+        this.messageGroup = messageGroup;
+    }
+
+    @Override
+    public MessageGroup getMessageGroup() {
+        return messageGroup;
     }
 }
