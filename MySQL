@@ -31,3 +31,125 @@ character-set-server=utf8
 # 创建新表时将使用的默认存储引擎
 
 default-storage-engine=INNODB
+
+=== ===
+
+2.添加环境变量
+
+操作如下：
+
+1）右键单击我的电脑->属性->高级系统设置(高级)->环境变量
+
+点击系统变量下的新建按钮
+
+输入变量名：MYSQL_HOME
+
+输入变量值：D:\Project\mysql-8.0.17-winx64
+
+#即为mysql的自定义解压目录。
+
+2）选择系统变量中的Path
+
+点击编辑按钮
+
+在变量值中添加变量值：%MYSQL_HOME%\bin
+
+注意是在原有变量值后面加上这个变量，用;隔开，不能删除原来的变量值
+
+
+
+3. 将mysql注册为windows系统服务
+
+
+1）从cmd(管理员身份打开C:\Windows\System32\cmd.exe)进入到MySQL解压目录下的 bin 目录下：
+
+2）输入服务安装命令：
+
+mysqld install MySQL --defaults-file="D:\Project\mysql-8.0.17-winx64\my.ini"
+
+安装成功后会提示服务安装成功。
+
+
+=== ===
+
+下面这步很恶心了,可能会启动不起来
+
+4. 启动MySQL服务
+
+方法一：
+
+启动服务命令为：net start mysql
+
+开始下面的步骤
+
+1.首先，你需要把原来的服务删除：
+
+在bin目录下执行
+
+mysqld --removemysql
+
+2.mysql的根目录下：
+
+你需要清空data目录。
+
+如果没有data目录，请自行创建一个空目录，起名为data！
+
+然后在bin目录下运行命令:
+
+mysqld --initialize-insecure --user=mysql
+
+进行初始化！
+
+cmd中键入
+接着运行:
+
+mysqld --install mysql --defaults-file=D:\Project\mysql-8.0.17-winx64\my.ini
+
+后面的路径记得改成自己的！
+
+这是注册mysql服务！
+
+注册成功
+接下来就是启动服务:
+
+请以管理员权限运行！
+
+net start mysql
+
+=== ===
+
+6. 修改 root 账号的密码
+
+刚安装完成时root账号默认密码为空
+
+**Start to use workbench 
+https://dev.mysql.com/downloads/workbench/
+
+Reset password in workbench and then run SQL
+ALTER USER 'root'@'localhost' IDENTIFIED WITH mysql_native_password BY '123456';
+
+import tables: init.sql, init_client.sql
+
+=== ===
+
+** Java
+POM
+    <dependency>
+    		<groupId>mysql</groupId>
+    		<artifactId>mysql-connector-java</artifactId>
+    		<version>8.0.11</version>
+		</dependency>
+    
+spring.datasource.url=jdbc:mysql://127.0.0.1:3306/qmq?useUnicode=true&characterEncoding=utf-8&useSSL=false&serverTimezone=UTC
+spring.datasource.username=root
+spring.datasource.password=123456
+spring.jpa.database=MYSQL
+spring.jpa.show-sql=true
+
+Run
+/qmq-demo/src/main/java/qunar/tc/qmq/demo/SpringBootMain.java
+
+http://127.0.0.1:8080/order/placeOrder
+
+
+
