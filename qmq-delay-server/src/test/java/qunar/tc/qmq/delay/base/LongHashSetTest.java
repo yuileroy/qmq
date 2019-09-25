@@ -16,6 +16,11 @@
 
 package qunar.tc.qmq.delay.base;
 
+public class LongHashSetTest {
+
+}
+
+/*
 import com.diffblue.deeptestutils.Reflector;
 
 import java.lang.reflect.InvocationTargetException;
@@ -74,3 +79,4 @@ public class LongHashSetTest {
         Assert.assertEquals(1, longHashSet2.size());
     }
 }
+*/
